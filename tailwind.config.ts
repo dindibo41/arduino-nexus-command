@@ -1,3 +1,4 @@
+
 import type { Config } from "tailwindcss";
 
 export default {
@@ -52,6 +53,10 @@ export default {
 					DEFAULT: 'hsl(var(--card))',
 					foreground: 'hsl(var(--card-foreground))'
 				},
+				success: {
+					DEFAULT: 'hsl(var(--success))',
+					foreground: 'hsl(var(--success-foreground))'
+				},
 				sidebar: {
 					DEFAULT: 'hsl(var(--sidebar-background))',
 					foreground: 'hsl(var(--sidebar-foreground))',
@@ -84,11 +89,32 @@ export default {
 					to: {
 						height: '0'
 					}
+				},
+				'radar-sweep': {
+					'0%': {
+						transform: 'rotate(-90deg)',
+					},
+					'100%': {
+						transform: 'rotate(90deg)',
+					}
+				},
+				'pulse': {
+					'0%': {
+						opacity: '0.6',
+					},
+					'50%': {
+						opacity: '1',
+					},
+					'100%': {
+						opacity: '0.6',
+					}
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
-				'accordion-up': 'accordion-up 0.2s ease-out'
+				'accordion-up': 'accordion-up 0.2s ease-out',
+				'radar-sweep': 'radar-sweep 4s ease-in-out infinite alternate',
+				'pulse': 'pulse 2s infinite'
 			}
 		}
 	},
