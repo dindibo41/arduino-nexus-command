@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Thermometer, Wind, Humidity, Sun } from "lucide-react";
+import { Thermometer, Wind, Droplets, Sun } from "lucide-react";
 import { generateWeatherData, WeatherData } from "../utils/mockData";
 
 const WeatherCard = () => {
@@ -48,7 +48,7 @@ const WeatherCard = () => {
           {/* Humidity Reading */}
           <div className="bg-background/30 rounded-lg p-4 flex flex-col items-center justify-center">
             <div className="flex items-center justify-center mb-2">
-              <Humidity className="text-blue-400" size={24} />
+              <Droplets className="text-blue-400" size={24} />
             </div>
             <div className="text-2xl font-bold text-blue-400">
               {weatherData.humidity}%
