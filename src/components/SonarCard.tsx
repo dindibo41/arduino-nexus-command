@@ -1,15 +1,16 @@
-
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Radar } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Radar, ToggleLeft } from "lucide-react";
 import { generateSonarPoint } from "../utils/mockData";
 import { useToast } from "@/hooks/use-toast";
+import SonarSafetyDialog from "./SonarSafetyDialog";
+import useSonarStore from "@/utils/sonarState";
 
 const SonarCard = () => {
   const [angle, setAngle] = useState(0);
   const [points, setPoints] = useState<{ x: number; y: number; active: boolean; id: number }[]>([]);
-  const [isSweeping, setIsSweeping] = useState(false);
-  const [isActivating, setIsActivating] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<number>();
@@ -17,7 +18,14 @@ const SonarCard = () => {
   const pointIdCounter = useRef(0);
   const { toast } = useToast();
 
-  // Function to convert polar coordinates (angle, distance) to Cartesian (x, y)
+  const {
+    isSonarActive,
+    isDeactivating,
+    showSafetyWarning,
+    setShowSafetyWarning,
+    toggleSonar,
+  } = useSonarStore();
+
   const polarToCartesian = useCallback((angle: number, distance: number, maxRadius: number) => {
     const radians = (angle - 90) * (Math.PI / 180);
     const x = 0.5 + (distance / 100) * Math.cos(radians) * 0.5;
@@ -26,7 +34,6 @@ const SonarCard = () => {
     return { x: x * maxRadius, y: y * maxRadius };
   }, []);
 
-  // Animation loop
   const animate = useCallback((time: number) => {
     if (previousTimeRef.current === undefined) {
       previousTimeRef.current = time;
@@ -34,7 +41,7 @@ const SonarCard = () => {
     
     const deltaTime = time - previousTimeRef.current;
     
-    if (deltaTime > 30 && isSweeping) {
+    if (deltaTime > 30 && isSonarActive) {
       previousTimeRef.current = time;
       
       setAngle((prevAngle) => {
@@ -55,9 +62,8 @@ const SonarCard = () => {
     }
     
     requestRef.current = requestAnimationFrame(animate);
-  }, [isSweeping]);
+  }, [isSonarActive]);
 
-  // Effect for animation loop
   useEffect(() => {
     requestRef.current = requestAnimationFrame(animate);
     return () => {
@@ -67,18 +73,19 @@ const SonarCard = () => {
     };
   }, [animate]);
 
-  // Effect to add points based on current angle
   useEffect(() => {
-    if (!containerRef.current || !isSweeping) return;
+    if (!containerRef.current || !isSonarActive) return;
     
     const maxRadius = containerRef.current.clientWidth;
     const { distance } = generateSonarPoint(angle);
     
     if (distance < 80) {
       const { x, y } = polarToCartesian(angle, distance, maxRadius);
-      
       const newPoint = { x, y, active: true, id: pointIdCounter.current++ };
-      setPoints(prev => prev.filter(p => p.id !== newPoint.id).concat(newPoint));
+      setPoints(prev => {
+        const filtered = prev.filter(p => p.id !== newPoint.id && p.x !== x && p.y !== y);
+        return filtered.concat(newPoint);
+      });
       
       setTimeout(() => {
         setPoints(prev => 
@@ -86,32 +93,54 @@ const SonarCard = () => {
         );
       }, 2000);
     }
-  }, [angle, polarToCartesian, isSweeping]);
+  }, [angle, polarToCartesian, isSonarActive]);
 
-  const toggleSweep = async () => {
-    if (!isSweeping) {
-      setIsActivating(true);
+  const handleToggle = async () => {
+    if (!isSonarActive && showSafetyWarning) {
+      setShowConfirmDialog(true);
+    } else {
+      await toggleSonar(!isSonarActive);
+      handleStatusChange(!isSonarActive);
+    }
+  };
+
+  const handleConfirmToggle = async () => {
+    setShowConfirmDialog(false);
+    await toggleSonar(true);
+    handleStatusChange(true);
+  };
+
+  const handleStatusChange = (newState: boolean) => {
+    if (newState) {
       toast({
         title: "Activating sonar...",
         description: "Please wait while the system initializes",
       });
       
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      setIsSweeping(true);
-      setIsActivating(false);
-      
-      toast({
-        title: "Sonar activated",
-        description: "System is now operational",
-      });
+      setTimeout(() => {
+        toast({
+          title: "Sonar activated",
+          description: "System is now operational",
+        });
+      }, 2000);
     } else {
-      setIsSweeping(false);
-      setPoints([]);
       toast({
         title: "Sonar deactivated",
         description: "System is now in standby mode",
       });
     }
+  };
+
+  const getStatusColor = () => {
+    if (isDeactivating) return "bg-yellow-500/20 text-yellow-500";
+    return isSonarActive
+      ? "bg-success/20 text-success"
+      : "bg-destructive/20 text-destructive";
+  };
+
+  const getStatusText = () => {
+    if (isDeactivating) return "Deactivating...";
+    return isSonarActive ? "Active" : "Standby";
   };
 
   return (
@@ -122,18 +151,21 @@ const SonarCard = () => {
             <Radar className="mr-2 text-primary" size={18} />
             Proximity Sonar
           </CardTitle>
-          <div 
-            className={`px-2 py-1 text-xs rounded-full cursor-pointer ${
-              isActivating 
-                ? "bg-yellow-500/20 text-yellow-500"
-                : isSweeping 
-                  ? "bg-success/20 text-success" 
-                  : "bg-destructive/20 text-destructive"
-            }`}
-            onClick={!isActivating ? toggleSweep : undefined}
-            role="button"
-          >
-            {isActivating ? "Initializing..." : isSweeping ? "Active" : "Standby"}
+          <div className="flex items-center gap-2">
+            <div 
+              className={`px-2 py-1 text-xs rounded-full ${getStatusColor()}`}
+            >
+              {getStatusText()}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleToggle}
+              disabled={isDeactivating}
+            >
+              <ToggleLeft className={`mr-2 ${isSonarActive ? "text-success" : "text-destructive"}`} />
+              {isSonarActive ? "ON" : "OFF"}
+            </Button>
           </div>
         </div>
       </CardHeader>
@@ -142,7 +174,6 @@ const SonarCard = () => {
           ref={containerRef} 
           className="w-full aspect-square rounded-full bg-background/50 relative overflow-hidden border border-border/30"
         >
-          {/* Grid lines */}
           {[1, 2, 3, 4].map((i) => (
             <div 
               key={i} 
@@ -156,7 +187,6 @@ const SonarCard = () => {
             />
           ))}
           
-          {/* Angle lines */}
           {[0, 30, 60, 90, 120, 150, 180].map((lineAngle) => (
             <div 
               key={lineAngle} 
@@ -168,18 +198,16 @@ const SonarCard = () => {
             />
           ))}
           
-          {/* Sonar sweep line */}
           <div 
             className="sonar-sweep absolute bottom-0 left-1/2 h-1/2 w-[2px] bg-success"
             style={{
               transform: `rotate(${angle - 90}deg)`,
               boxShadow: '0 0 10px hsl(var(--success)), 0 0 20px hsl(var(--success))',
-              opacity: isSweeping ? 1 : 0,
+              opacity: isSonarActive ? 1 : 0,
               transition: 'opacity 0.3s ease'
             }}
           />
           
-          {/* Detected points */}
           {points.map(point => (
             <div
               key={point.id}
@@ -202,6 +230,16 @@ const SonarCard = () => {
         </div>
         
         <audio ref={audioRef} src="/ping.mp3" preload="auto" />
+
+        <SonarSafetyDialog
+          open={showConfirmDialog}
+          onOpenChange={setShowConfirmDialog}
+          onConfirm={handleConfirmToggle}
+          showDontAskOption={true}
+          onDontAskAgainChange={(checked) => setShowSafetyWarning(!checked)}
+          title="Activate Sonar System"
+          description="This action will automatically turn on the cooling fan and the transducer. Do you want to proceed?"
+        />
       </CardContent>
     </Card>
   );

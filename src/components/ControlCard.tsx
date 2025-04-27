@@ -5,22 +5,59 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Power } from "lucide-react";
 import { getDefaultControlStates, ControlState } from "../utils/mockData";
-import { useToast } from "../hooks/use-toast";
+import { useToast } from "@/hooks/use-toast";
+import useSonarStore from "@/utils/sonarState";
+import SonarSafetyDialog from "./SonarSafetyDialog";
 
 const ControlCard = () => {
-  const [controls, setControls] = useState<ControlState[]>(getDefaultControlStates());
+  const [controls, setControls] = useState<ControlState[]>([
+    ...getDefaultControlStates(),
+    { id: 4, name: "Transducer", isActive: false }
+  ]);
+  const [showWarningDialog, setShowWarningDialog] = useState(false);
+  const [pendingToggle, setPendingToggle] = useState<number | null>(null);
   const { toast } = useToast();
+  const { isSonarActive } = useSonarStore();
+
+  const isSonarControl = (id: number) => {
+    return id === 1 || id === 4; // Cooling fan and Transducer
+  };
 
   const handleToggle = (id: number) => {
+    const control = controls.find(c => c.id === id);
+    if (!control) return;
+
+    const newState = !control.isActive;
+
+    // If trying to deactivate sonar-related controls while sonar is active
+    if (isSonarControl(id) && !newState && isSonarActive) {
+      toast({
+        title: "Warning",
+        description: "Cannot deactivate while sonar is running",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // If turning off a sonar-related component
+    if (isSonarControl(id) && control.isActive) {
+      setPendingToggle(id);
+      setShowWarningDialog(true);
+      return;
+    }
+
+    updateControl(id, newState);
+  };
+
+  const updateControl = (id: number, newState: boolean) => {
     setControls(prevControls => 
       prevControls.map(control => 
-        control.id === id ? { ...control, isActive: !control.isActive } : control
+        control.id === id ? { ...control, isActive: newState } : control
       )
     );
     
     const control = controls.find(c => c.id === id);
     if (control) {
-      const newState = !control.isActive;
       toast({
         title: `${control.name} ${newState ? 'Activated' : 'Deactivated'}`,
         description: `The ${control.name.toLowerCase()} is now ${newState ? 'ON' : 'OFF'}`,
@@ -29,10 +66,21 @@ const ControlCard = () => {
     }
   };
 
+  // Effect to sync sonar-related controls
+  useEffect(() => {
+    if (isSonarActive) {
+      setControls(prev => 
+        prev.map(control => 
+          isSonarControl(control.id) ? { ...control, isActive: true } : control
+        )
+      );
+    }
+  }, [isSonarActive]);
+
   return (
     <Card className="tech-card h-full">
       <CardHeader className="pb-2">
-        <CardTitle className="text-lg flex items-center">
+        <CardTitle className="flex items-center text-lg">
           <Power className="mr-2 text-primary" size={18} />
           Control Panel
         </CardTitle>
@@ -70,6 +118,19 @@ const ControlCard = () => {
         <div className="mt-4 text-xs text-muted-foreground text-center">
           All controls respond instantly
         </div>
+
+        <SonarSafetyDialog
+          open={showWarningDialog}
+          onOpenChange={setShowWarningDialog}
+          onConfirm={() => {
+            if (pendingToggle !== null) {
+              updateControl(pendingToggle, false);
+              setPendingToggle(null);
+            }
+          }}
+          title="Warning"
+          description="This action can potentially harm the sonar functionality. Do you wish to continue?"
+        />
       </CardContent>
     </Card>
   );
