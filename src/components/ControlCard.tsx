@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -9,14 +10,18 @@ import useSonarStore from "@/utils/sonarState";
 import SonarSafetyDialog from "./SonarSafetyDialog";
 
 const ControlCard = () => {
+  // Replace the initial controls to remove Main Relay and reorder them
   const [controls, setControls] = useState<ControlState[]>([
-    ...getDefaultControlStates(),
-    { id: 4, name: "Transducer", isActive: false }
+    { id: 1, name: "Cooling Fan", isActive: false },
+    { id: 4, name: "Transducer", isActive: false },
+    { id: 2, name: "Navigation Lights", isActive: false },
+    { id: 3, name: "Emergency Beacon", isActive: false }
   ]);
+  
   const [showWarningDialog, setShowWarningDialog] = useState(false);
   const [pendingToggle, setPendingToggle] = useState<number | null>(null);
   const { toast } = useToast();
-  const { isSonarActive } = useSonarStore();
+  const { isSonarActive, isDeactivating } = useSonarStore();
 
   const isSonarControl = (id: number) => {
     return id === 1 || id === 4; // Cooling fan and Transducer
@@ -73,8 +78,17 @@ const ControlCard = () => {
           isSonarControl(control.id) ? { ...control, isActive: true } : control
         )
       );
+    } else if (isDeactivating) {
+      // Do nothing during deactivation phase
+    } else {
+      // When sonar is fully deactivated, also deactivate related controls
+      setControls(prev => 
+        prev.map(control => 
+          isSonarControl(control.id) ? { ...control, isActive: false } : control
+        )
+      );
     }
-  }, [isSonarActive]);
+  }, [isSonarActive, isDeactivating]);
 
   return (
     <Card className="tech-card h-full">

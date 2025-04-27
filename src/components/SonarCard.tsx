@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ const SonarCard = () => {
   const {
     isSonarActive,
     isDeactivating,
+    isInitializing,
     showSafetyWarning,
     setShowSafetyWarning,
     toggleSonar,
@@ -132,6 +134,7 @@ const SonarCard = () => {
   };
 
   const getStatusColor = () => {
+    if (isInitializing) return "bg-yellow-500/20 text-yellow-500";
     if (isDeactivating) return "bg-yellow-500/20 text-yellow-500";
     return isSonarActive
       ? "bg-success/20 text-success"
@@ -139,6 +142,7 @@ const SonarCard = () => {
   };
 
   const getStatusText = () => {
+    if (isInitializing) return "Initializing...";
     if (isDeactivating) return "Deactivating...";
     return isSonarActive ? "Active" : "Standby";
   };
@@ -161,7 +165,7 @@ const SonarCard = () => {
               variant="outline"
               size="sm"
               onClick={handleToggle}
-              disabled={isDeactivating}
+              disabled={isDeactivating || isInitializing}
             >
               <ToggleLeft className={`mr-2 ${isSonarActive ? "text-success" : "text-destructive"}`} />
               {isSonarActive ? "ON" : "OFF"}
