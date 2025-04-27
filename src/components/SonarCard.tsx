@@ -3,29 +3,27 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Radar } from "lucide-react";
 import { generateSonarPoint } from "../utils/mockData";
+import { useToast } from "@/hooks/use-toast";
 
 const SonarCard = () => {
   const [angle, setAngle] = useState(0);
   const [points, setPoints] = useState<{ x: number; y: number; active: boolean; id: number }[]>([]);
-  const [isSweeping, setIsSweeping] = useState(true);
+  const [isSweeping, setIsSweeping] = useState(false);
+  const [isActivating, setIsActivating] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<number>();
   const previousTimeRef = useRef<number>();
   const pointIdCounter = useRef(0);
+  const { toast } = useToast();
 
   // Function to convert polar coordinates (angle, distance) to Cartesian (x, y)
   const polarToCartesian = useCallback((angle: number, distance: number, maxRadius: number) => {
-    // Convert angle from degrees to radians and adjust for the 180-degree sweep
     const radians = (angle - 90) * (Math.PI / 180);
-    // Calculate x and y positions (normalized to 0-1)
     const x = 0.5 + (distance / 100) * Math.cos(radians) * 0.5;
     const y = 1 - (distance / 100) * Math.sin(radians) * 0.5;
     
-    return { 
-      x: x * maxRadius, 
-      y: y * maxRadius 
-    };
+    return { x: x * maxRadius, y: y * maxRadius };
   }, []);
 
   // Animation loop
@@ -36,20 +34,16 @@ const SonarCard = () => {
     
     const deltaTime = time - previousTimeRef.current;
     
-    if (deltaTime > 30 && isSweeping) { // Update every 30ms
+    if (deltaTime > 30 && isSweeping) {
       previousTimeRef.current = time;
       
-      // Calculate new angle (0-180 degrees)
       setAngle((prevAngle) => {
         const newAngle = prevAngle + 1;
         
-        // If we've completed a full sweep
         if (newAngle >= 180) {
-          // Play ping sound
           if (audioRef.current) {
             audioRef.current.currentTime = 0;
             audioRef.current.play().catch(() => {
-              // Handle any autoplay restrictions
               console.log("Audio play was prevented");
             });
           }
@@ -75,40 +69,49 @@ const SonarCard = () => {
 
   // Effect to add points based on current angle
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current || !isSweeping) return;
     
     const maxRadius = containerRef.current.clientWidth;
     const { distance } = generateSonarPoint(angle);
     
-    if (distance < 80) { // Only add points for objects within range
+    if (distance < 80) {
       const { x, y } = polarToCartesian(angle, distance, maxRadius);
       
-      // Add a new point
-      const newPoint = { 
-        x, 
-        y, 
-        active: true, 
-        id: pointIdCounter.current++
-      };
+      const newPoint = { x, y, active: true, id: pointIdCounter.current++ };
+      setPoints(prev => prev.filter(p => p.id !== newPoint.id).concat(newPoint));
       
-      setPoints(prev => [...prev, newPoint]);
-      
-      // Set timeout to deactivate the point
       setTimeout(() => {
         setPoints(prev => 
-          prev.map(p => p.id === newPoint.id ? { ...p, active: false } : p)
+          prev.filter(p => p.id !== newPoint.id)
         );
-        
-        // Remove inactive points after they fade out to avoid memory issues
-        setTimeout(() => {
-          setPoints(prev => prev.filter(p => p.id !== newPoint.id));
-        }, 5000);
       }, 2000);
     }
-  }, [angle, polarToCartesian]);
+  }, [angle, polarToCartesian, isSweeping]);
 
-  const toggleSweep = () => {
-    setIsSweeping(prev => !prev);
+  const toggleSweep = async () => {
+    if (!isSweeping) {
+      setIsActivating(true);
+      toast({
+        title: "Activating sonar...",
+        description: "Please wait while the system initializes",
+      });
+      
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      setIsSweeping(true);
+      setIsActivating(false);
+      
+      toast({
+        title: "Sonar activated",
+        description: "System is now operational",
+      });
+    } else {
+      setIsSweeping(false);
+      setPoints([]);
+      toast({
+        title: "Sonar deactivated",
+        description: "System is now in standby mode",
+      });
+    }
   };
 
   return (
@@ -120,13 +123,17 @@ const SonarCard = () => {
             Proximity Sonar
           </CardTitle>
           <div 
-            className={`px-2 py-1 text-xs rounded-full ${isSweeping 
-              ? "bg-success/20 text-success" 
-              : "bg-destructive/20 text-destructive"}`}
-            onClick={toggleSweep}
+            className={`px-2 py-1 text-xs rounded-full cursor-pointer ${
+              isActivating 
+                ? "bg-yellow-500/20 text-yellow-500"
+                : isSweeping 
+                  ? "bg-success/20 text-success" 
+                  : "bg-destructive/20 text-destructive"
+            }`}
+            onClick={!isActivating ? toggleSweep : undefined}
             role="button"
           >
-            {isSweeping ? "Active" : "Paused"}
+            {isActivating ? "Initializing..." : isSweeping ? "Active" : "Standby"}
           </div>
         </div>
       </CardHeader>
@@ -163,10 +170,12 @@ const SonarCard = () => {
           
           {/* Sonar sweep line */}
           <div 
-            className="sonar-sweep absolute bottom-0 left-1/2 h-1/2 w-[2px] bg-primary/80"
+            className="sonar-sweep absolute bottom-0 left-1/2 h-1/2 w-[2px] bg-success"
             style={{
               transform: `rotate(${angle - 90}deg)`,
-              boxShadow: '0 0 10px hsl(var(--primary)), 0 0 20px hsl(var(--primary))'
+              boxShadow: '0 0 10px hsl(var(--success)), 0 0 20px hsl(var(--success))',
+              opacity: isSweeping ? 1 : 0,
+              transition: 'opacity 0.3s ease'
             }}
           />
           
@@ -174,11 +183,13 @@ const SonarCard = () => {
           {points.map(point => (
             <div
               key={point.id}
-              className={`radar-point ${point.active ? 'active' : ''}`}
+              className="absolute w-2 h-2 rounded-full"
               style={{
                 left: point.x,
                 top: point.y,
-                backgroundColor: point.active ? 'hsl(var(--primary))' : 'hsl(var(--primary) / 0.5)',
+                backgroundColor: 'hsl(var(--success))',
+                boxShadow: '0 0 8px hsl(var(--success))',
+                transform: 'translate(-50%, -50%)',
               }}
             />
           ))}

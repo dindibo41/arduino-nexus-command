@@ -3,6 +3,7 @@ import Header from "./Header";
 import SonarCard from "./SonarCard";
 import WeatherCard from "./WeatherCard";
 import ControlCard from "./ControlCard";
+import DiagnosticsCard from "./DiagnosticsCard";
 
 interface DashboardProps {
   username: string;
@@ -15,10 +16,15 @@ const Dashboard = ({ username, onLogout }: DashboardProps) => {
       <Header username={username} onLogout={onLogout} />
       
       <div className="flex-1 p-4 md:p-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Sonar Card */}
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-2">
             <SonarCard />
+          </div>
+          
+          {/* Diagnostics Card */}
+          <div className="lg:col-span-1">
+            <DiagnosticsCard />
           </div>
           
           {/* Weather Station Card */}
@@ -27,7 +33,7 @@ const Dashboard = ({ username, onLogout }: DashboardProps) => {
           </div>
           
           {/* Control Panel Card */}
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-4">
             <ControlCard />
           </div>
         </div>
